@@ -19,19 +19,18 @@ try:
     # Merge datasets
     df = order_items.merge(orders, on="order_id", suffixes=("_item", "_order"))
     df = df.merge(products, left_on="product_id", right_on="id")
-    print("🧠 Final Columns:", df.columns.tolist())
-
+    
+    print("🧠 Final Columns:", df.columns.tolist())  # Debug: show all columns
 
     # Convert dates
     df['created_at_order'] = df['created_at_order'].apply(parse_date)
     df['order_date'] = df['created_at_order'].dt.date
 
-
     ### --- CATEGORY KPIs ---
     cat_kpis = df.groupby(['category', 'order_date']).agg(
         daily_revenue=pd.NamedAgg(column="sale_price", aggfunc="sum"),
         avg_order_value=pd.NamedAgg(column="sale_price", aggfunc="mean"),
-        total_returns=pd.NamedAgg(column="returned_at", aggfunc=lambda x: x.notnull().sum()),
+        total_returns=pd.NamedAgg(column="returned_at_item", aggfunc=lambda x: x.notnull().sum()),
         total_orders=pd.NamedAgg(column="order_id", aggfunc="count")
     ).reset_index()
 
@@ -45,13 +44,13 @@ try:
     order_kpis = df.groupby('order_date').agg(
         total_orders=pd.NamedAgg(column="order_id", aggfunc=lambda x: x.nunique()),
         total_revenue=pd.NamedAgg(column="sale_price", aggfunc="sum"),
-        total_items_sold=pd.NamedAgg(column="id", aggfunc="count"),
-        return_count=pd.NamedAgg(column="returned_at", aggfunc=lambda x: x.notnull().sum()),
+        total_items_sold=pd.NamedAgg(column="id_x", aggfunc="count"),
+        total_returns=pd.NamedAgg(column="returned_at_item", aggfunc=lambda x: x.notnull().sum()),
         unique_customers=pd.NamedAgg(column="user_id_order", aggfunc=lambda x: x.nunique())
     ).reset_index()
 
-    order_kpis['return_rate'] = order_kpis['return_count'] / order_kpis['total_orders']
-    order_kpis.drop(columns=['return_count'], inplace=True)
+    order_kpis['return_rate'] = order_kpis['total_returns'] / order_kpis['total_orders']
+    order_kpis.drop(columns=['total_returns'], inplace=True)
 
     print("\n✅ Order KPIs:")
     print(order_kpis.head())
