@@ -19,6 +19,8 @@ try:
     # Merge datasets
     df = order_items.merge(orders, on="order_id", suffixes=("_item", "_order"))
     df = df.merge(products, left_on="product_id", right_on="id")
+    print("🧠 Final Columns:", df.columns.tolist())
+
 
     # Convert dates
     df['created_at_order'] = df['created_at_order'].apply(parse_date)
