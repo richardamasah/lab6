@@ -21,8 +21,9 @@ try:
     df = df.merge(products, left_on="product_id", right_on="id")
 
     # Convert dates
-    df['created_at'] = df['created_at'].apply(parse_date)
-    df['order_date'] = df['created_at'].dt.date
+    df['created_at_order'] = df['created_at_order'].apply(parse_date)
+    df['order_date'] = df['created_at_order'].dt.date
+
 
     ### --- CATEGORY KPIs ---
     cat_kpis = df.groupby(['category', 'order_date']).agg(
