@@ -3,6 +3,8 @@ import boto3
 import os
 import sys
 from botocore.exceptions import ClientError
+from decimal import Decimal
+
 
 # === CONFIG ===
 BUCKET_NAME = "lab6ecs"
