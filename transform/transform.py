@@ -33,10 +33,10 @@ def write_order_kpis(dynamodb, df):
         item = {
             'order_date': str(row['order_date']),
             'total_orders': int(row['total_orders']),
-            'total_revenue': float(row['total_revenue']),
+            'total_revenue': Decimal(row['total_revenue']),
             'total_items_sold': int(row['total_items_sold']),
             'unique_customers': int(row['unique_customers']),
-            'return_rate': float(row['return_rate'])
+            'return_rate': Decimal(row['return_rate'])
         }
         table.put_item(Item=item)
         print(f"📦 Wrote order KPI for {item['order_date']}")
@@ -47,9 +47,9 @@ def write_category_kpis(dynamodb, df):
         item = {
             'category': str(row['category']),
             'order_date': str(row['order_date']),
-            'daily_revenue': float(row['daily_revenue']),
-            'avg_order_value': float(row['avg_order_value']),
-            'avg_return_rate': float(row['avg_return_rate'])
+            'daily_revenue': Decimal(row['daily_revenue']),
+            'avg_order_value': Decimal(row['avg_order_value']),
+            'avg_return_rate': Decimal(row['avg_return_rate'])
         }
         table.put_item(Item=item)
         print(f"📦 Wrote category KPI for {item['category']} on {item['order_date']}")
