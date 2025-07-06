@@ -15,6 +15,9 @@ FILES = {
     "order_items": "order_items_part1.csv"
 }
 
+DDB_ORDER_TABLE = "order_kpis"
+DDB_CATEGORY_TABLE = "category_kpis"
+
 def download_file(s3_client, s3_key, local_path):
     try:
         s3_client.download_file(BUCKET_NAME, s3_key, local_path)
@@ -22,7 +25,34 @@ def download_file(s3_client, s3_key, local_path):
     except ClientError as e:
         raise Exception(f"❌ Failed to download {s3_key}: {e}")
 
-def transform():
+def write_order_kpis(dynamodb, df):
+    table = dynamodb.Table(DDB_ORDER_TABLE)
+    for _, row in df.iterrows():
+        item = {
+            'order_date': str(row['order_date']),
+            'total_orders': int(row['total_orders']),
+            'total_revenue': float(row['total_revenue']),
+            'total_items_sold': int(row['total_items_sold']),
+            'unique_customers': int(row['unique_customers']),
+            'return_rate': float(row['return_rate'])
+        }
+        table.put_item(Item=item)
+        print(f"📦 Wrote order KPI for {item['order_date']}")
+
+def write_category_kpis(dynamodb, df):
+    table = dynamodb.Table(DDB_CATEGORY_TABLE)
+    for _, row in df.iterrows():
+        item = {
+            'category': str(row['category']),
+            'order_date': str(row['order_date']),
+            'daily_revenue': float(row['daily_revenue']),
+            'avg_order_value': float(row['avg_order_value']),
+            'avg_return_rate': float(row['avg_return_rate'])
+        }
+        table.put_item(Item=item)
+        print(f"📦 Wrote category KPI for {item['category']} on {item['order_date']}")
+
+def transform_and_store():
     # Load files
     products = pd.read_csv(os.path.join(LOCAL_DIR, FILES['products']))
     orders = pd.read_csv(os.path.join(LOCAL_DIR, FILES['orders']))
@@ -60,8 +90,13 @@ def transform():
     order_kpis['return_rate'] = order_kpis['total_returns'] / order_kpis['total_orders']
     order_kpis.drop(columns=['total_returns'], inplace=True)
 
-    print("\n✅ Order KPIs:")
+    print("✅ Order KPIs:")
     print(order_kpis.head())
+
+    # Write to DynamoDB
+    dynamodb = boto3.resource('dynamodb')
+    write_order_kpis(dynamodb, order_kpis)
+    write_category_kpis(dynamodb, cat_kpis)
 
 def main():
     try:
@@ -71,8 +106,9 @@ def main():
             local_path = os.path.join(LOCAL_DIR, key)
             download_file(s3, s3_path, local_path)
 
-        print("🚀 Starting KPI Transform...")
-        transform()
+        print("🚀 Starting KPI Transform & Upload...")
+        transform_and_store()
+        print("✅ Done writing to DynamoDB")
         sys.exit(0)
 
     except Exception as e:
