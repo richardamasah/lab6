@@ -21,7 +21,7 @@ DEBOUNCE_SECONDS = int(os.environ.get('DEBOUNCE_SECONDS', 120))
 
 table = dynamodb.Table(DDB_TABLE)
 
-# Expected headers
+# ✅ Expected headers
 REQUIRED_HEADERS = {
     'orders': ['order_id', 'user_id', 'status', 'created_at', 'returned_at', 'shipped_at', 'delivered_at', 'num_of_item'],
     'order_items': ['id', 'order_id', 'user_id', 'product_id', 'status', 'created_at', 'shipped_at', 'delivered_at', 'returned_at', 'sale_price'],
@@ -57,28 +57,33 @@ def lambda_handler(event, context):
                 handle_rejected_file(bucket, key, file_type, "Missing required headers")
                 continue
 
-            # Handle products.csv separately
+            # 🔄 Handle products separately
             if file_type == "products":
-                products_dest = "validated/products/products.csv"
-                s3.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': key}, Key=products_dest)
+                validated_key = "validated/products/products.csv"
+                s3.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': key}, Key=validated_key)
                 s3.delete_object(Bucket=bucket, Key=key)
 
                 table.update_item(
                     Key={"group_key": "latest_products"},
                     UpdateExpression="SET products_path = :p",
-                    ExpressionAttributeValues={":p": products_dest}
+                    ExpressionAttributeValues={":p": validated_key}
                 )
-                logger.info(f"🟢 Products file updated to: {products_dest}")
+                logger.info(f"🟢 Products file updated to: {validated_key}")
                 continue
 
-            # Grab first data row for date
+            # 📆 Extract order date
             data_row = next(reader, None)
             if data_row is None:
                 raise Exception("No data rows found")
 
             order_date = extract_order_date(headers, data_row)
 
-            update_registry(group_key, file_type, key, order_date)
+            # ✅ Copy to validated folder
+            validated_key = f"validated/{file_type}/{os.path.basename(key)}"
+            s3.copy_object(Bucket=bucket, CopySource={'Bucket': bucket, 'Key': key}, Key=validated_key)
+            s3.delete_object(Bucket=bucket, Key=key)
+
+            update_registry(group_key, file_type, validated_key, order_date)
 
         except Exception as e:
             logger.error(f"❌ Error in file {key}: {str(e)}")
@@ -87,10 +92,10 @@ def lambda_handler(event, context):
     return {"validation_status": "SUCCESS"}
 
 def detect_file_type(key):
-    if "orders" in key:
-        return "orders"
-    elif "order_items" in key:
+    if "order_items" in key:
         return "order_items"
+    elif "orders" in key:
+        return "orders"
     elif "products" in key:
         return "products"
     return "unknown"
@@ -106,14 +111,14 @@ def extract_order_date(headers, row):
     except:
         return datetime.utcnow().strftime("%Y-%m-%d")
 
-def update_registry(group_key, file_type, path, order_date):
+def update_registry(group_key, file_type, validated_path, order_date):
     update_expr = "SET #fp = :path, #flag = :true, order_date = :od"
     expr_names = {
         "#fp": f"{file_type}_path",
         "#flag": f"has_{file_type}"
     }
     expr_values = {
-        ":path": path,
+        ":path": validated_path,
         ":true": True,
         ":od": order_date
     }
@@ -127,7 +132,8 @@ def update_registry(group_key, file_type, path, order_date):
     )
 
     item = response.get('Attributes', {})
-    if item.get("has_orders") and item.get("has_order_items"):
+
+    if item.get("has_orders") and item.get("has_order_items") and "products_path" in item:
         logger.info(f"🚀 Triggering Step Function for group: {group_key}")
         stepfunctions.start_execution(
             stateMachineArn=STEP_FUNCTION_ARN,
@@ -136,10 +142,12 @@ def update_registry(group_key, file_type, path, order_date):
                 "order_date": order_date,
                 "orders_path": item.get("orders_path"),
                 "order_items_path": item.get("order_items_path"),
-                "products_path": item.get("products_path", "validated/products/products.csv")
+                "products_path": item.get("products_path")
             })
         )
     else:
+        if "products_path" not in item:
+            logger.info(f"🛑 Products file missing — waiting before triggering group: {group_key}")
         ttl = int((datetime.utcnow() + timedelta(seconds=DEBOUNCE_SECONDS)).timestamp())
         table.update_item(
             Key={"group_key": group_key},
