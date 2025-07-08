@@ -1,0 +1,129 @@
+{
+  "Comment": "ECS batch validation and transformation pipeline",
+  "StartAt": "PrepareInput",
+  "States": {
+    "PrepareInput": {
+      "Type": "Pass",
+      "ResultPath": "$.input_data",
+      "Next": "RunValidatorTask"
+    },
+    "RunValidatorTask": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "LaunchType": "FARGATE",
+        "Cluster": "ecs-data-pipeline1",
+        "TaskDefinition": "validator-task",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "ENABLED",
+            "Subnets": [
+              "subnet-063f69f7221c739cb"
+            ],
+            "SecurityGroups": [
+              "sg-004668c51baf2b7a2"
+            ]
+          }
+        }
+      },
+      "ResultPath": "$.validator_result",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "RunTransformerTask"
+    },
+    "RunTransformerTask": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "LaunchType": "FARGATE",
+        "Cluster": "ecs-data-pipeline1",
+        "TaskDefinition": "transformer-task",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "ENABLED",
+            "Subnets": [
+              "subnet-063f69f7221c739cb"
+            ],
+            "SecurityGroups": [
+              "sg-004668c51baf2b7a2"
+            ]
+          }
+        }
+      },
+      "ResultPath": "$.transformer_result",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "ArchiveFiles"
+    },
+    "ArchiveFiles": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "ecs-archive-validated-files",
+        "Payload": {
+          "group_key.$": "$.input_data.group_key",
+          "order_date.$": "$.input_data.order_date",
+          "orders_path.$": "$.input_data.orders_path",
+          "order_items_path.$": "$.input_data.order_items_path",
+          "products_path.$": "$.input_data.products_path"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "HandleFailure"
+        }
+      ],
+      "Next": "Success"
+    },
+    "HandleFailure": {
+      "Type": "Fail",
+      "Error": "StepFailed",
+      "Cause": "One or more ECS tasks failed"
+    },
+    "Success": {
+      "Type": "Succeed"
+    }
+  }
+}
