@@ -40,7 +40,7 @@ def validate_data():
         print(" Validation Passed")
         sys.exit(0)
     except Exception as e:
-        print(f"❌ Validation Failed: {e}")
+        print(f" Validation Failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
