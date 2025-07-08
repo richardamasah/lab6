@@ -28,7 +28,7 @@ def lambda_handler(event, context):
             )
             s3.delete_object(Bucket=bucket_name, Key=original_key)
 
-            print(f"✅ Archived: {original_key} → {archive_key}")
+            print(f" Archived: {original_key} → {archive_key}")
 
         return {
             "status": "ARCHIVED",
