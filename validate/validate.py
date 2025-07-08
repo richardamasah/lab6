@@ -50,5 +50,5 @@ if __name__ == "__main__":
         print("🔍 Running data validation...")
         validate_data()
     except Exception as e:
-        print(f"💥 Fatal error: {e}")
+        print(f" Fatal error: {e}")
         sys.exit(1)
