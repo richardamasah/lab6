@@ -12,7 +12,7 @@ S3_PREFIX = "validated"
 LOCAL_DIR = "/tmp"
 
 FILES = {
-    "products": "products.csv",
+    "products": "products/products.csv",
     "orders": "orders_part1.csv",
     "order_items": "order_items_part1.csv"
 }
