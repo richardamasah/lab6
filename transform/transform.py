@@ -24,7 +24,7 @@ def download_file(s3_client, s3_key, local_path):
         s3_client.download_file(BUCKET_NAME, s3_key, local_path)
         print(f" Downloaded: {s3_key}")
     except ClientError as e:
-        raise Exception(f"❌ Failed to download {s3_key}: {e}")
+        raise Exception(f" Failed to download {s3_key}: {e}")
 
 def write_order_kpis(dynamodb, df):
     table = dynamodb.Table(DDB_ORDER_TABLE)
