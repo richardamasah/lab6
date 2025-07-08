@@ -22,7 +22,7 @@ DDB_CATEGORY_TABLE = "category_kpis"
 def download_file(s3_client, s3_key, local_path):
     try:
         s3_client.download_file(BUCKET_NAME, s3_key, local_path)
-        print(f"✅ Downloaded: {s3_key}")
+        print(f" Downloaded: {s3_key}")
     except ClientError as e:
         raise Exception(f"❌ Failed to download {s3_key}: {e}")
 
