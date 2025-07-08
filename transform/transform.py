@@ -13,8 +13,8 @@ LOCAL_DIR = "/tmp"
 
 FILES = {
     "products": "products/products.csv",
-    "orders": "orders_part1.csv",
-    "order_items": "order_items_part1.csv"
+    "orders": "orders/orders_part1.csv",
+    "order_items": "order_items/order_items_part1.csv"
 }
 
 DDB_ORDER_TABLE = "order_kpis"
