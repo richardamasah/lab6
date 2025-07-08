@@ -5,7 +5,6 @@ import sys
 from botocore.exceptions import ClientError
 from decimal import Decimal
 
-
 # === CONFIG ===
 BUCKET_NAME = "lab6ecs"
 S3_PREFIX = "validated"
@@ -23,7 +22,7 @@ DDB_CATEGORY_TABLE = "category_kpis"
 def download_file(s3_client, s3_key, local_path):
     try:
         s3_client.download_file(BUCKET_NAME, s3_key, local_path)
-        print(f" Downloaded: {s3_key}")
+        print(f"✅ Downloaded: {s3_key}")
     except ClientError as e:
         raise Exception(f"❌ Failed to download {s3_key}: {e}")
 
@@ -55,20 +54,20 @@ def write_category_kpis(dynamodb, df):
         print(f"📦 Wrote category KPI for {item['category']} on {item['order_date']}")
 
 def transform_and_store():
-    # Load files
-    products = pd.read_csv(os.path.join(LOCAL_DIR, FILES['products']))
-    orders = pd.read_csv(os.path.join(LOCAL_DIR, FILES['orders']))
-    order_items = pd.read_csv(os.path.join(LOCAL_DIR, FILES['order_items']))
+    # Flattened paths
+    products = pd.read_csv(f"{LOCAL_DIR}/products.csv")
+    orders = pd.read_csv(f"{LOCAL_DIR}/orders_part1.csv")
+    order_items = pd.read_csv(f"{LOCAL_DIR}/order_items_part1.csv")
 
-    # Merge
+    # Merge data
     df = order_items.merge(orders, on="order_id", suffixes=("_item", "_order"))
     df = df.merge(products, left_on="product_id", right_on="id")
 
-    # Dates
+    # Convert date
     df['created_at_order'] = pd.to_datetime(df['created_at_order'], errors='coerce')
     df['order_date'] = df['created_at_order'].dt.date
 
-    ### === CATEGORY KPIs ===
+    # === CATEGORY KPIs ===
     cat_kpis = df.groupby(['category', 'order_date']).agg(
         daily_revenue=pd.NamedAgg(column="sale_price", aggfunc="sum"),
         avg_order_value=pd.NamedAgg(column="sale_price", aggfunc="mean"),
@@ -81,7 +80,7 @@ def transform_and_store():
     print("✅ Category KPIs:")
     print(cat_kpis.head())
 
-    ### === ORDER KPIs ===
+    # === ORDER KPIs ===
     order_kpis = df.groupby('order_date').agg(
         total_orders=pd.NamedAgg(column="order_id", aggfunc=lambda x: x.nunique()),
         total_revenue=pd.NamedAgg(column="sale_price", aggfunc="sum"),
@@ -95,7 +94,7 @@ def transform_and_store():
     print("✅ Order KPIs:")
     print(order_kpis.head())
 
-    # Write to DynamoDB
+    # Store in DynamoDB
     dynamodb = boto3.resource('dynamodb')
     write_order_kpis(dynamodb, order_kpis)
     write_category_kpis(dynamodb, cat_kpis)
@@ -103,10 +102,10 @@ def transform_and_store():
 def main():
     try:
         s3 = boto3.client("s3")
-        for key in FILES.values():
-            s3_path = f"{S3_PREFIX}/{key}"
-            local_path = os.path.join(LOCAL_DIR, key)
-            download_file(s3, s3_path, local_path)
+        for logical_name, s3_key in FILES.items():
+            local_path = os.path.join(LOCAL_DIR, os.path.basename(s3_key))  # Flatten to /tmp/*.csv
+            full_s3_path = f"{S3_PREFIX}/{s3_key}"
+            download_file(s3, full_s3_path, local_path)
 
         print("🚀 Starting KPI Transform & Upload...")
         transform_and_store()
