@@ -166,4 +166,4 @@ def handle_rejected_file(bucket, key, file_type, reason):
         Body=json.dumps({"reason": reason, "original_key": key}),
         ContentType="application/json"
     )
-    logger.warning(f"❌ File rejected and moved to: {rejected_key}")
+    logger.warning(f" File rejected and moved to: {rejected_key}")
