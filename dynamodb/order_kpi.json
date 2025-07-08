@@ -1,0 +1,10 @@
+{
+  "TableName": "order_kpis",
+  "KeySchema": [
+    { "AttributeName": "order_date", "KeyType": "HASH" }
+  ],
+  "AttributeDefinitions": [
+    { "AttributeName": "order_date", "AttributeType": "S" }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}
