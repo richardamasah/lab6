@@ -8,7 +8,7 @@ from decimal import Decimal
 
 # === CONFIG ===
 BUCKET_NAME = "lab6ecs"
-S3_PREFIX = "raw"
+S3_PREFIX = "validated"
 LOCAL_DIR = "/tmp"
 
 FILES = {
