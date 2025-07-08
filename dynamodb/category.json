@@ -1,0 +1,12 @@
+{
+  "TableName": "category_kpis",
+  "KeySchema": [
+    { "AttributeName": "category", "KeyType": "HASH" },
+    { "AttributeName": "order_date", "KeyType": "RANGE" }
+  ],
+  "AttributeDefinitions": [
+    { "AttributeName": "category", "AttributeType": "S" },
+    { "AttributeName": "order_date", "AttributeType": "S" }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}
