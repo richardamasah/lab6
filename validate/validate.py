@@ -37,7 +37,7 @@ def validate_data():
         assert set(order_items['product_id']).issubset(set(products['id'])), "product_id mismatch"
         assert orders['num_of_item'].min() > 0, "Invalid num_of_item"
 
-        print("✅ Validation Passed")
+        print(" Validation Passed")
         sys.exit(0)
     except Exception as e:
         print(f"❌ Validation Failed: {e}")
