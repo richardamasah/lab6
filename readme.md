@@ -1,5 +1,6 @@
 
 
+## E-Commerce Real-Time Event-Driven Data Pipeline
 ##  Project Overview
 
 This project simulates a real-time data pipeline for an e-commerce company to compute order-level and category-level KPIs daily. It uses **AWS ECS**, **S3**, **Lambda**, **Step Functions**, and **DynamoDB**, orchestrated via **event-driven architecture** and **CI/CD with GitHub Actions**. The goal is to ingest raw CSV files from S3, validate them, transform them into business insights, and store the final KPIs in DynamoDB.
