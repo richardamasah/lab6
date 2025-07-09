@@ -293,6 +293,8 @@ docker push <your-ecr-repo>
 
 ###  6. Step Function Configuration
 
+![Step Function](images/stepfunctions_graph.png)
+
 Your state machine should look like this:
 
 ```
