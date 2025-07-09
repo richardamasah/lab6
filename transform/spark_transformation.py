@@ -117,7 +117,7 @@ try:
         logger.error(f"Failed to write Category-Level KPIs to DynamoDB: {e.response['Error']['Message']}")
         sys.exit(1) # Exit with error code
 
-    logger.info("✅ Finished writing KPIs to DynamoDB")
+    logger.info(" Finished writing KPIs to DynamoDB")
     sys.exit(0) # Exit successfully
 
 except Exception as e:
