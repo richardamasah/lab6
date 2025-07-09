@@ -3,9 +3,9 @@ name: Deploy Validator to ECR
 on:
   push:
     branches:
-      - lab6   # 👈 Your branch name
+      - lab6   
     paths:
-      - 'validate/**'         # 👈 Only trigger if validate code changes
+      - 'validate/**'         #  Only trigger if validate code changes
       - '.github/workflows/ecr.yml'
 
 jobs:
