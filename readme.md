@@ -123,70 +123,297 @@ Tracks which files have arrived and when to trigger Step Functions.
 
 ---
 
-##  Project Setup & Deployment
 
-### 1.  Clone the Repository
 
-```bash
-git clone https://github.com/yourusername/ecs-kpi-pipeline.git
-cd ecs-kpi-pipeline
-cp .env.template .env   # Fill in S3 bucket, ARNs, etc
-```
+## 🔧 Project Setup & Deployment 
 
-### 2.  Build Docker Images
-
-```bash
-docker build -t validator:latest -f ecs/validator.Dockerfile ./ecs
-docker build -t transformer:latest -f ecs/transformer.Dockerfile ./ecs
-```
-
-### 3.  Push to ECR via GitHub Actions
-
-* GitHub Secrets Required: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ECR_REPO`
-* Workflow: `.github/workflows/deploy.yml` will handle ECR push + ECS update
-
-### 4.  Upload Input Files
-
-Place raw CSVs into `s3://<bucket>/raw/`:
-
-* `orders_part1.csv`
-* `order_items_part1.csv`
-* `products.csv`
-
-Step Function will start automatically once all 3 validated versions exist.
+This section provides a **comprehensive, step-by-step guide** to set up and deploy your **Event-Driven Real-Time E-Commerce Data Pipeline** using AWS services, GitHub, Docker, and CI/CD.
 
 ---
 
-##  IAM Role Permissions (Minimum Required)
+###  1. Local Project Structure
 
-### Lambda Execution Role:
+Here’s how your repo should be structured in **VS Code** or GitHub:
 
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "s3:*",
-    "dynamodb:*",
-    "states:StartExecution"
-  ],
-  "Resource": "*"
-}
 ```
-
-### ECS Task Role:
-
-```json
-{
-  "Effect": "Allow",
-  "Action": ["s3:GetObject", "dynamodb:PutItem"],
-  "Resource": "*"
-}
+ecommerce-data-pipeline/
+│
+├── lambda/
+│   ├── file_watcher/               # Lambda to validate incoming S3 files
+│   │   └── lambda_function.py
+│   ├── ecs_archiver/               # Lambda to archive validated files
+│   │   └── lambda_function.py
+│
+├── transformer/
+│   ├── transform_spark.py          # Spark transformation script
+│   ├── Dockerfile
+│
+├── validator/
+│   ├── validate.py                 # Python validator script
+│   ├── Dockerfile
+│
+├── state_machine/
+│   └── ecommerce_step_function.json  # JSON definition of Step Function
+│
+├── dynamo/
+│   └── schema_definitions.md       # Info on partition/sort keys
+│
+├── .github/
+│   └── workflows/
+│       └── ci-cd.yml               # GitHub Actions for ECS, Lambda, etc.
+│
+├── README.md
+└── requirements.txt
 ```
 
 ---
 
+###  2. S3 Bucket Setup
 
+Create your S3 bucket (e.g., `lab6ecs`) and organize folders:
 
+```bash
+raw/
+  ├── orders/
+  ├── order_items/
+  ├── products/
+
+validated/
+  ├── orders/
+  ├── order_items/
+  ├── products/
+
+rejected/
+  ├── unknown/
+  ├── orders/
+  ├── order_items/
+
+archived/
+  ├── orders/
+  ├── order_items/
+  ├── products/
+```
+
+These folders help separate files by stage: **raw**, **validated**, **rejected**, **archived**.
+
+---
+
+###  3. DynamoDB Tables
+
+Create **two tables**:
+
+#### `order_kpis`
+
+| Field        | Type   | Role          |
+| ------------ | ------ | ------------- |
+| `order_date` | String | Partition Key |
+
+#### `category_kpis`
+
+| Field        | Type   | Role          |
+| ------------ | ------ | ------------- |
+| `category`   | String | Partition Key |
+| `order_date` | String | Sort Key      |
+
+ These keys support **efficient querying by day** or **per product category per day**.
+
+---
+
+###  4. Lambda Deployment
+
+#### A. `file_watcher` Lambda (S3-triggered)
+
+* Trigger: `lab6ecs/raw/` (PUT event)
+* Validates CSV schema (based on type)
+* Extracts metadata (`group_key`, `order_date`)
+* Moves valid files to `validated/`
+* Updates ingestion record in DynamoDB
+* Starts Step Function if both files for a group are present
+
+ Add environment variables:
+
+```env
+DDB_TABLE=ingestion_registry
+STEP_FUNCTION_ARN=arn:aws:states:...
+```
+
+---
+
+#### B. `ecs_archiver` Lambda (Step Function Task)
+
+* Receives input from Step Function
+* Moves processed files to `archived/` folder
+* Ensures historical traceability
+
+ Add environment variable:
+
+```env
+BUCKET_NAME=lab6ecs
+```
+
+Deploy these Lambdas using AWS Console or CLI (or GitHub Actions later).
+
+---
+
+###  5. ECS Task Setup (Fargate)
+
+You’ll need **two tasks**:
+
+#### A. `validator-task` (Python)
+
+* Triggered by Step Function
+* Docker image pulls `orders.csv`, `order_items.csv`, `products.csv` from S3
+* Performs header checks, referential integrity validation
+* Returns exit code `0` or `1`
+
+#### B. `transformer-task` (Spark)
+
+* Uses PySpark to merge and compute KPIs
+* Writes final KPIs to `DynamoDB`
+* Logs key outputs
+
+ Build Docker Images:
+
+```bash
+# Build image
+docker build -t validator ./validator
+docker build -t transformer ./transformer
+
+# Tag
+docker tag validator:latest <your-account-id>.dkr.ecr.<region>.amazonaws.com/validator
+docker tag transformer:latest <your-account-id>.dkr.ecr.<region>.amazonaws.com/transformer
+
+# Push
+docker push <your-ecr-repo>
+```
+
+ Create task definitions in ECS console referencing these ECR images.
+
+---
+
+###  6. Step Function Configuration
+
+Your state machine should look like this:
+
+```
+RunValidatorTask ─▶ RunTransformerTask ─▶ ArchiveFiles ─▶ Success
+                       │                       │
+                       └──────Catch──────┐     │
+                                        ▼     ▼
+                                  HandleFailure (Fail)
+```
+
+Key components:
+
+* `RunValidatorTask`: ECS validator
+* `RunTransformerTask`: ECS Spark transformer
+* `ArchiveFiles`: Lambda
+* `Catch`: Handles failure paths
+
+Save the definition JSON under `/state_machine/ecommerce_step_function.json`.
+
+---
+
+###  7. IAM Policies
+
+You’ll need 4 roles:
+
+#### A. Lambda Role
+
+* Read/write to S3
+* Access to DynamoDB
+* Start Step Function execution
+
+#### B. ECS Execution Role
+
+* Pull image from ECR
+* CloudWatch Logs
+* Read from S3
+
+#### C. ECS Task Role
+
+* Write to DynamoDB
+
+#### D. Step Function Role
+
+* Invoke ECS tasks and Lambdas
+
+---
+
+###  8. GitHub Actions CI/CD 
+
+Use `.github/workflows/ci-cd.yml` to:
+
+* Run unit tests
+* Build & push ECS Docker images to ECR
+* Deploy Lambda functions via `zip`
+* Deploy updated Step Function JSON via CLI
+
+Example flow:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET }}
+          aws-region: eu-north-1
+
+      - name: Build Docker
+        run: |
+          docker build -t validator ./validator
+          docker build -t transformer ./transformer
+
+      - name: Push to ECR
+        run: |
+          docker push ...
+```
+
+---
+
+###  9. Deployment Summary (End-to-End)
+
+1. Upload files to `raw/` in S3
+2. `file_watcher` Lambda triggers:
+
+   * Validates headers
+   * Updates registry
+   * Starts Step Function (if both `orders` and `order_items` are present)
+3. Step Function:
+
+   * Runs validator ECS
+   * Runs transformer ECS
+   * Archives files using Lambda
+4. DynamoDB gets populated with KPI data
+5. CI/CD automatically builds, tests, and deploys updates from GitHub
+
+---
+
+###  10. Monitoring & Alerts 
+
+For **extra points**:
+
+* Add **SNS topic** for Step Function failures
+* Use CloudWatch Logs for Lambda and ECS tasks
+* Track rejected files in `rejected/` S3 path
+
+---
+
+Let me know if you want me to generate a working CI/CD `.yml` file or help you add this setup as a real folder in VS Code. You're building something *production-grade*, Sir Djanie — let's finish it strong. 🔥
+
+```
+---
 
 ##  Step Function Definition 
 
@@ -321,19 +548,7 @@ To simulate real-time ingestion:
 
 ---
 
-##  DynamoDB Schema
 
-### ingestion\_registry
-
-```json
-{
-  "group_key": "part1",
-  "orders_path": "validated/orders/orders_part1.csv",
-  "order_items_path": "validated/order_items/order_items_part1.csv",
-  "products_path": "validated/products/products.csv",
-  "has_orders": true,
-  "has_order_items": true,
-  "order_date": "2023-08-01"
 }
 ```
 
